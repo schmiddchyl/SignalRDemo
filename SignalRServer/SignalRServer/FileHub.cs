@@ -1,14 +1,29 @@
 ﻿using Microsoft.AspNetCore.SignalR;
+using SignalRServer;
 using System.Threading.Channels;
 
 public class FileHub : Hub
 {
 
+
+    public override Task OnConnectedAsync()
+    {
+        UserHandler.ConnectedIds.Add(Context.ConnectionId);
+        return base.OnConnectedAsync();
+    }
+
+    public override Task OnDisconnectedAsync(Exception exception)
+    {
+        UserHandler.ConnectedIds.Remove(Context.ConnectionId);
+        return base.OnDisconnectedAsync(exception);
+    }
+
+
     // This method will be called by the client to send a message to the server.
     public async Task SendMessage(string user, string message)
     {
         // Broadcasts the message to all connected clients.
-        await Clients.Caller.SendAsync("ReceiveMessage", user, message);
+        await Clients.Caller.SendAsync("NotifyStartUpload", user, message);
     }
 
     public async Task BroadcastStream(IAsyncEnumerable<string> stream)
@@ -61,25 +76,7 @@ public class FileHub : Hub
 
     public async Task UploadFileStream(IAsyncEnumerable<byte[]> fileStream, string fileName, long fileSize)
     {
-        var filePath = @"C:\test\newfileout2.xlsx"; ;
-
-        // Delete existing file with the same name (optional)
-        if (File.Exists(filePath))
-        {
-            File.Delete(filePath);
-        }
-
-        await using (var outputStream = new FileStream(filePath, FileMode.CreateNew))
-        {
-            await foreach (var chunk in fileStream)
-            {
-                // Write each chunk to the file
-                await outputStream.WriteAsync(chunk, 0, chunk.Length);
-            }
-        }
-
-        // Notify the client that the file upload is complete
-        await Clients.Caller.SendAsync("FileUploadComplete", fileName);
+       
     }
 
 

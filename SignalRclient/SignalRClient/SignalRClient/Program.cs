@@ -17,11 +17,10 @@ class Program
             Console.WriteLine($"File {fileName} uploaded successfully!");
         });
 
-        connection.On<string, string>("ReceiveMessage", async (user, message) =>
+        connection.On<string, string>("NotifyStartUpload", async (user, message) =>
         {
             Console.WriteLine($"{user}: {message}");
-            string path = @"c:\Dev.zip";
-
+            string path = @"c:\app.js";
             try
             {
                 await SendFile(path, connection);
@@ -90,10 +89,6 @@ class Program
                 {
                     Console.WriteLine($"Error sending message: {ex.Message}");
                 }
-            
-           
-
-
 
             }
         }
@@ -152,7 +147,7 @@ class Program
         });
 
         // Call the UploadFile method on the server and stream the file
-        await connection.StreamAsChannelAsync<byte[]>("UploadFile", channel.Reader, fileName, fileSize);
+        await connection.StreamAsChannelAsync<byte[]>("UploadFileStream", channel.Reader, fileName, fileSize);
     }
 
 }
