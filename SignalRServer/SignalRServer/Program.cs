@@ -2,10 +2,11 @@ var builder = WebApplication.CreateBuilder(args);
 
 // Add services to the container.
 builder.Services.AddRazorPages();
+builder.Services.AddControllers();
 builder.Services.AddSignalR(o =>
 {
     o.EnableDetailedErrors = true;
-    o.MaximumReceiveMessageSize = 10240000;
+    o.MaximumReceiveMessageSize = 102400000;
 });
 
 var app = builder.Build();
@@ -24,7 +25,8 @@ app.UseStaticFiles();
 app.UseRouting();
 
 app.UseAuthorization();
-
+app.MapControllers();
 app.MapRazorPages();
 app.MapHub<FileHub>("/filehub");
+app.MapControllers();
 app.Run();

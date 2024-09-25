@@ -1,5 +1,7 @@
 ﻿using Microsoft.AspNetCore.SignalR.Client;
 using System;
+using System.Data.Common;
+using System.Threading.Channels;
 using System.Threading.Tasks;
 
 class Program
@@ -11,7 +13,28 @@ class Program
             .WithUrl("http://localhost:5177/filehub")  // Replace with your server URL
             .Build();
 
+        connection.On<string>("FileUploadComplete", fileName => {
+            Console.WriteLine($"File {fileName} uploaded successfully!");
+        });
+
+        connection.On<string, string>("ReceiveMessage", async (user, message) =>
+        {
+            Console.WriteLine($"{user}: {message}");
+            string path = @"c:\Dev.zip";
+
+            try
+            {
+                await SendFile(path, connection);
+            }
+
+            catch (Exception ex)
+            {
+                Console.WriteLine($"Connection failed: {ex.Message}");
+                return;
+            }
+        });
         // Set up a handler to receive messages from the server
+        /*
         connection.On<string, string>("ReceiveMessage", async (user, message) =>
         {
             Console.WriteLine($"{user}: {message}");
@@ -22,8 +45,11 @@ class Program
             try
             {
 
-                await connection.InvokeAsync("UploadFile", "ex.xlsx", readText);
+               // await connection.InvokeAsync("UploadFile", "ex.xlsx", readText);
+             
+             
             }
+
             catch (Exception ex)
             {
                 Console.WriteLine($"Connection failed: {ex.Message}");
@@ -31,7 +57,7 @@ class Program
             }
 
         });
-
+        */
         try
         {
             // Start the connection
@@ -72,4 +98,61 @@ class Program
             }
         }
     }
+
+    static async Task SendFile(string filePath, HubConnection connection)
+    {
+        var fileName = Path.GetFileName(filePath);
+        var fileSize = new FileInfo(filePath).Length;
+        var chunkSize = 1024 * 1024 * 10; // 1MB chunk size
+        int chunkNumber = 0;
+
+        using (var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+        {
+            byte[] buffer = new byte[chunkSize];
+            int bytesRead;
+
+            while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+            {
+                var chunk = new byte[bytesRead];
+                Array.Copy(buffer, chunk, bytesRead);
+
+                // Send chunk to the server
+                await connection.InvokeAsync("ReceiveFileChunk", fileName, chunk, fileSize, chunkNumber);
+                Console.WriteLine($"Sent chunk {chunkNumber}");
+                chunkNumber++;
+            }
+        }
+    }
+
+    static async Task StreamFile(string filePath, HubConnection connection)
+    {
+        var fileSize = new FileInfo(filePath).Length;
+        var fileName = Path.GetFileName(filePath);
+
+        // Create a channel to stream the file as byte[] chunks
+        var channel = Channel.CreateUnbounded<byte[]>();
+
+        // Task to read file and write to the channel
+        _ = Task.Run(async () =>
+        {
+            var chunkSize = 1024 * 1024; // 1MB chunk size
+            byte[] buffer = new byte[chunkSize];
+            using (var fileStream = new FileStream(filePath, FileMode.Open, FileAccess.Read))
+            {
+                int bytesRead;
+                while ((bytesRead = await fileStream.ReadAsync(buffer, 0, buffer.Length)) > 0)
+                {
+                    var chunk = new byte[bytesRead];
+                    Array.Copy(buffer, chunk, bytesRead);
+
+                    await channel.Writer.WriteAsync(chunk);
+                }
+            }
+            channel.Writer.Complete();
+        });
+
+        // Call the UploadFile method on the server and stream the file
+        await connection.StreamAsChannelAsync<byte[]>("UploadFile", channel.Reader, fileName, fileSize);
+    }
+
 }
